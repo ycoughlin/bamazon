@@ -33,9 +33,37 @@ function start() {
 		inquirer
 			.prompt([
 				{
-					//Asking for ID of the product they would like to buy.
-					name: "idChosen",
+					name: "id",
 					type: "input",
 					message: "Please enter the ID number of the product you wish to purchase from BAMAZON: "
 				},
-				
+				{
+                    name: "quantity",
+                    type: "input"
+                    message: "Quantity?"
+                }
+            ]).then(function (answers) {
+                purchase(answers.id, answers.quantity)
+            })
+    }
+
+function purchase(id, quantity) {
+            if (quantity > 0) {
+                connection.query(`SELECT stock_quantity,price FROM products WHERE item_id = ${id}`, function (error, result) {
+                    if (error) throw error
+                    // if there is enough stock
+                    if (result[0].stock_quantity >= quantity) {
+                        console.log(`Purchase successful`)
+                        // subtract quantity from stock_quantity
+                        connection.query(`UPDATE products SET stock_quantity = stock_quantity - ${quantity} WHERE item_id = ${id}`)
+                        // show how much it cost
+                        console.log(`Thank you for your purchase of ${quantity * result[0].price}`)
+                    } else {
+                        console.log(`We don't have enough of this item to fulfill your order`)
+                    }
+                    connection.end()
+                })
+            } else {
+                console.error(`Quantity you want is less than 0`)
+            }
+        }
