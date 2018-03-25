@@ -1,69 +1,129 @@
-//Including the required npm packages
 var mysql = require("mysql");
 var inquirer = require("inquirer");
 
-// Creating the connection information for the sql database
+var newStockQuantity = 0;
+
 var connection = mysql.createConnection({
-	host: "localhost",
-	port: 3306,
-	user: "root",
-	password: "",
-	database: "bamazon"
+    host: "localhost",
+    port: 3306,
+    user: "root",
+    password: "",
+    database: "bamazon"
 });
 
-// Connecting to the mysql server and sql database
-connection.connect(function(err) {
-	if (err) throw err;
-	console.log("\n==== WELCOME TO BAMAZON CUSTOMER VIEW ====\n\nYou are now connected as id " + connection.threadId + "\n");
-	// Run the start function after the connection is made to begin the application
-	start();
+//connect to mysql DB
+connection.connect(function (err) {
+    if (err) throw err;
+    console.log("Connected as id: " + connection.threadId);
+    printList();
+    begin();
 });
 
-// Function that prompts the user
-function start() {
-	//Displaying all of the items available for sale.
-	console.log("These are all the products available on BAMAZON right now: \n");
-	connection.query("SELECT id, product_name, price FROM products", function(error, results) {
-		if (error) throw error;
-
-		// Log all results of the SELECT statement
-		console.log(JSON.stringify(results, null, " ") + "\n\n=========================================================\n\n");
-
-		// Prompt users with two messages:
-		inquirer
-			.prompt([
-				{
-					name: "id",
-					type: "input",
-					message: "Please enter the ID number of the product you wish to purchase from BAMAZON: "
-				},
-				{
-                    name: "quantity",
-                    type: "input"
-                    message: "Quantity?"
-                }
-            ]).then(function (answers) {
-                purchase(answers.id, answers.quantity)
-            })
-    }
-
-function purchase(id, quantity) {
-            if (quantity > 0) {
-                connection.query(`SELECT stock_quantity,price FROM products WHERE item_id = ${id}`, function (error, result) {
-                    if (error) throw error
-                    // if there is enough stock
-                    if (result[0].stock_quantity >= quantity) {
-                        console.log(`Purchase successful`)
-                        // subtract quantity from stock_quantity
-                        connection.query(`UPDATE products SET stock_quantity = stock_quantity - ${quantity} WHERE item_id = ${id}`)
-                        // show how much it cost
-                        console.log(`Thank you for your purchase of ${quantity * result[0].price}`)
-                    } else {
-                        console.log(`We don't have enough of this item to fulfill your order`)
-                    }
-                    connection.end()
-                })
-            } else {
-                console.error(`Quantity you want is less than 0`)
-            }
+//print list of products
+function printList() {
+    connection.query("SELECT * FROM products", function (err, results) {
+        if (err) throw err;
+        console.log("Products");
+        for (var i = 0; i < results.length; i++) {
+            console.log("Id: " + results[i].id + " --- " + results[i].productName + " --- " + "$" + results[i].price);
         }
+        console.log("-------");
+    });
+}
+
+
+function begin() {
+    connection.query("SELECT * FROM products", function (err, results) {
+        if (err) throw err;
+        inquirer.prompt([
+            {
+                name: "id",
+                type: "input",
+                message: "Choose id of product you want"
+            }, {
+                name: "quantity",
+                type: "input",
+                message: "Type your quantity"
+            }]).then(function (answer) {
+                for (var i = 0; i < results.length; i++) {
+                    if (results[i].id == answer.id) {
+
+                        if (results[i].stockQuantity < answer.quantity) {
+                            console.log("Quantity in stock is lower than selected amount");
+                            begin();
+                        }
+                        else if (results[i].stockQuantity >= answer.quantity) {
+                            price(answer.quantity, results[i].price);
+                            purchase(results[i].stockQuantity, answer.quantity, answer.id);
+                        }
+                    }
+                }
+            });
+    });
+}
+
+// price for the total ammount to be payed
+
+function price(quantityToBuy, price) {
+    var total = quantityToBuy * price;
+    console.log("Your total is: " + total);
+}
+
+
+// confirmation to buy the product(s) 
+
+function purchase(stockQuantity, quantityToBuy, id) {
+    inquirer.prompt([{
+        name: "confirmation",
+        type: "rawlist",
+        message: "Do you want to make this purchase?",
+        choices: ["YES", "NO"]
+    }]).then(function (answer) {
+        if (answer.confirmation.toUpperCase() === "YES") {
+            quantityUpdate(stockQuantity, quantityToBuy, id);
+        } else {
+            begin();
+        }
+    });
+}
+
+//update stock quantity in DB
+
+function quantityUpdate(stockQuantity, quantityToBuy, id) {
+
+    //variable that contains new Stock quantity of the purchased item
+    newStockQuantity = stockQuantity - quantityToBuy;
+
+    //connects to mySQL DB and updates the stock quantity
+    connection.query(
+        "UPDATE products SET ? WHERE ?",
+        [{
+            stockQuantity: newStockQuantity
+        }, {
+            id: id
+        }],
+        function (err) {
+            if (err) throw err;
+            console.log("Your transaction has been processed");
+
+            // confirmation to continue buying or leave
+
+            inquirer.prompt([{
+                name: "confirmation",
+                type: "rawlist",
+                message: "Would you like to make another purchase?",
+                choices: ["YES", "NO"]
+            }]).
+                then(function (answer) {
+                    if (answer.confirmation.toUpperCase() === "YES") {
+                        begin()
+                    } else {
+                        console.log("Thank you for your purchase, your item(s) will leave our warehouse soon!");
+
+                        connection.end();
+                    }
+                });
+        });
+
+
+};

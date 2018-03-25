@@ -1,4 +1,4 @@
-/Including the required npm packages
+// /Including the required npm packages
 var mysql = require("mysql");
 var inquirer = require("inquirer");
 
@@ -55,4 +55,4 @@ function viewProducts() {
         }
         showMenu()
     })
-}
+};
